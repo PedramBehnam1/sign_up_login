@@ -5,6 +5,7 @@ import {
   Get,
   Param,
   Res,
+  HttpException,
   HttpStatus,
   BadRequestException,
   Put,
@@ -15,6 +16,7 @@ import { SignUpDto } from '../dto/signup.dto';
 import { LoginDto } from '../dto/login.dto';
 import { LogoutDto } from '../dto/logout.dto';
 import { HttpService } from '@nestjs/axios';
+import { UserDto } from '../dto/user.dto';
 
 @Controller('auth')
 export class UserController {
@@ -28,30 +30,63 @@ export class UserController {
     try {
       const token = await this.userService.signUp(signUpDto);
 
-      return res.status(200).json({ token: token });
-    } catch (error) {
-      return res.status(400).json(error);
+      return res.status(200).json({
+        isVerified: token.isVerified,
+        isLogined: token.isLogined,
+        token: token.token,
+      });
+    } catch (err) {
+      await this.notFoundApi(err);
     }
   }
 
   @Put('/login')
-  login(@Body() loginDto: LoginDto) {
-    return this.userService.login(loginDto);
+  async login(@Body() loginDto: LoginDto) {
+    try {
+      return this.userService.login(loginDto);
+    } catch (err) {
+      await this.notFoundApi(err);
+    }
   }
 
   @Put('/logout')
-  logout(@Body() logoutDto: LogoutDto) {
-    return this.userService.logout(logoutDto);
+  async logout(@Body() logoutDto: LogoutDto) {
+    try {
+      return this.userService.logout(logoutDto);
+    } catch (err) {
+      await this.notFoundApi(err);
+    }
   }
 
   @Get('/users')
   async getAllUsers(@Res() res) {
     const users = await this.userService.getUsers();
-    return res.status(200).json({ users });
+    try {
+      return res.status(200).json({ users });
+    } catch (err) {
+      await this.notFoundApi(err);
+    }
   }
 
   @Get('/users/:id')
-  getUser(@Param('id') userId: string) {
-    return this.userService.getSingleUser(userId);
+  async getUser(@Body() getUserDto: UserDto) {
+    try {
+      return this.userService.getSingleUser(getUserDto);
+    } catch (err) {
+      await this.notFoundApi(err);
+    }
+  }
+
+  private async notFoundApi(err) {
+    throw new HttpException(
+      {
+        status: HttpStatus.UNAUTHORIZED,
+        error: err.message.split(':')[0],
+      },
+      HttpStatus.UNAUTHORIZED,
+      {
+        cause: err,
+      },
+    );
   }
 }

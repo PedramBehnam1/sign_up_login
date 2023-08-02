@@ -9,6 +9,7 @@ export const UserSchema = new mongoose.Schema({
   userName: { type:String , required:[true,"Please provide username"], unique:[true,"This username is used."]},
   password: { type:String , required:[true,"Please provide password"]},
   isVerified: {type:Boolean, default:false},
+  isLogined: {type:Boolean, default:false},
 })
 
 export interface User {
@@ -19,4 +20,5 @@ export interface User {
   userName: string;
   password: string;
   isVerified: boolean;
+  isLogined: boolean;
 }

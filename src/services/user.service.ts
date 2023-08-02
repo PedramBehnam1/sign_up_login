@@ -8,6 +8,7 @@ import { JwtService } from '@nestjs/jwt';
 import { SignUpDto } from '../dto/signup.dto';
 import { LoginDto } from '../dto/login.dto';
 import { LogoutDto } from '../dto/logout.dto';
+import { UserDto } from '../dto/user.dto';
 
 
 
@@ -43,7 +44,7 @@ export class UserService {
       
       const token = this._createToken(newUser,false)
       
-      return { verified:token.verified , token:token.token};
+      return { isVerified:token.verified , isLogined:false , token:token.token};
 
     }catch(error){
       throw new UnauthorizedException(error);
@@ -51,9 +52,19 @@ export class UserService {
     }
   }
 
-  private _createToken({email},verified){
-    const token = this.jwtService.sign({email})
+  private _createToken(newUser,verified){
+    
     if (verified) {
+      const token = this.jwtService.sign({
+        id:newUser.id,
+        firstName:newUser.firstName,
+        lastName:newUser.lastName,
+        email:newUser.email,
+        userName:newUser.userName,
+        password:newUser.password,
+        isVerified:newUser.isVerified,
+        isLogined:newUser.isLogined
+      })
       return({verified,token})
     }else{
       return({verified,token:""})
@@ -68,14 +79,16 @@ export class UserService {
       id: user.id,
       firstName: user.firstName,
       lastName: user.lastName,
-      userName: user.userName,
-      password: user.password,
+      isVerified: user.isVerified,
+      isLogined: user.isLogined,
     }));
   }
 
   
-  async getSingleUser(userId: string) {
-    const user = await this.findUser(userId);
+  async getSingleUser( userDto: UserDto) {
+    const { token } = userDto;
+    await this.checkToken(token);
+    const user = await this.findUser(token);
     
     
     return {
@@ -85,21 +98,40 @@ export class UserService {
       email: user.email,
       userName: user.userName,
       password: user.password,
-      isVerfied: user.isVerified
+      isVerfied: user.isVerified,
+      isLogined: user.isLogined,
     };
   }
 
-  private async findUser(id: string): Promise<User> {
+  private async findUser(token:string): Promise<User> {
+    //Convert token to field of user
     let user;
     try {
-        user = await this.userModel.findOne({id}).exec();
+      user = await JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
     } catch (error) {
-      throw new NotFoundException('Could not find user.');
+      throw new UnauthorizedException('Could convert token to user value.');
     }
-    if (!user) {
-      throw new NotFoundException('Could not find user.');
-    }
+    
     return user;
+  }
+
+  private async checkToken(token:string): Promise<any>{
+    //Check Token is empty.
+    if (!token || token=="") {
+      throw new HttpException('Please enter your Token.', HttpStatus.UNAUTHORIZED)
+    }
+
+    //Check Token is expired.
+    await this.isExpired(token);
+  }
+
+  private  async isExpired(token:string): Promise<any>{
+    const expiry = (JSON.parse(atob(token.split('.')[1]))).exp;
+    const result = Math.floor((new Date).getTime() / 1000) >= expiry;
+    
+    if (result) {
+      throw new HttpException('Expired your token.', HttpStatus.FORBIDDEN)
+    }
   }
 
   
@@ -116,11 +148,12 @@ export class UserService {
     if (!isPasswordMatched) {
       throw new UnauthorizedException('Invalid password!...');
     }
-    user.isVerified = true;
+    
+    user.isLogined = true;
     user.save();
     const token = this._createToken(user,true)
     
-    return { token };
+    return { isVerified:user.isVerified, isLogined:user.isLogined, token:token.token };
   }
   async logout(logoutDto: LogoutDto) {
     const { email } = logoutDto;
@@ -130,9 +163,12 @@ export class UserService {
       throw new UnauthorizedException('Invalid email!...');
     }
 
-    user.isVerified = false;
+    if (!user.isVerified) {
+      user.isVerified = true;
+    }
+    user.isLogined = false;
     user.save();
-    return { token:"", isVerified:false };
+    return {isVerified:user.isVerified, isLogined:user.isLogined, token:"" };
   }
 
   
